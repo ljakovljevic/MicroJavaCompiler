@@ -1,0 +1,329 @@
+package rs.ac.bg.etf.pp1;
+
+import java_cup.runtime.*;
+import org.apache.log4j.*;
+import rs.ac.bg.etf.pp1.ast.*;
+
+parser code {:
+
+	boolean errorDetected = false;
+
+	Logger log = Logger.getLogger(getClass());
+
+
+    // slede redefinisani metodi za prijavu gresaka radi izmene teksta poruke
+
+    public void report_fatal_error(String message, Object info) throws java.lang.Exception {
+      done_parsing();
+      report_error(message, info);
+    }
+
+    public void syntax_error(Symbol cur_token) {
+        report_error("\nSintaksna greska", cur_token);
+    }
+
+    public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+        report_fatal_error("Fatalna greska, parsiranje se ne moze nastaviti", cur_token);
+    }
+
+    public void report_error(String message, Object info) {
+    	errorDetected = true;
+    	StringBuilder msg = new StringBuilder(message);
+    	if (info instanceof Symbol)
+            msg.append (" na liniji ").append(((Symbol)info).left);
+        log.error(msg.toString());
+    }
+
+:}
+
+init with {:
+    errorDetected = false;
+:}
+
+scan with {:
+	Symbol s = this.getScanner().next_token();
+	if (s != null && s.value != null)
+		log.info(s.toString() + " " + s.value.toString());
+	return s;
+:}
+
+terminal PROG, LBRACE, RBRACE, CONST, ASSIGN, SEMI, COMMA, LSQUARE, RSQUARE, ENUM, LPAREN, RPAREN, VOID, IF, BREAK, CONTINUE, RETURN, READ, PRINT, SWITCH, FOR;
+terminal INC, DEC, MINUS, NEW, OR, AND, ELSE, QUESTION, COLON, DOT, LENGTH, EQUAL, NOTEQUAL, GREATER, GREATEREQUAL, LESS, LESSEQUAL, PLUS, MUL, DIV, REM, CASE;
+terminal String IDENT;
+terminal Integer NUMBER, BOOL;
+terminal Character CHARACTER;
+
+nonterminal Program, PrgramName, ConstVarEnumDeclList, ConstDeclList, VarDeclList, EnumDeclList, Type, ConstDecl, ConstDeclMore, Constant, MethodDeclList;
+nonterminal VarDecl, VarDeclMore, EnumDecl, EnumDeclMore, MethodDecl, MethodRetAndName, FormParList, StatementList, VarDeclListEnum, FormPar, FormParMore;
+nonterminal Statement, Condition, ElseStatement, ExprBase, DesignatorStatement, CaseList, Assignop, ActParList, ActParMore, ActPar;
+nonterminal Addop, Mulop, Unary, CondTermList, CondTerm, CondFactList, CondFact, Relop, EnumDeclName;
+nonterminal DesignatorDeclList, DesignatorDecl, CaseDecl, CaseStatementList, CaseStatement;
+
+nonterminal rs.etf.pp1.symboltable.concepts.Struct Factor, FactorSub, MulopFactorList, Term, AddopTermList, Expr;
+nonterminal rs.etf.pp1.symboltable.concepts.Obj Designator;
+
+precedence left ELSE;
+
+Program ::= (Program) PROG PrgramName ConstVarEnumDeclList LBRACE MethodDeclList RBRACE;
+
+PrgramName ::= (PrgramName) IDENT;
+
+ConstVarEnumDeclList ::=    (ConstVarEnumDeclList_c) ConstVarEnumDeclList ConstDeclList
+                            |
+                            (ConstVarEnumDeclList_v) ConstVarEnumDeclList VarDeclList
+                            |
+                            (ConstVarEnumDeclList_enum) ConstVarEnumDeclList EnumDeclList
+                            |
+                            (ConstVarEnumDeclList_e)
+                            ;
+
+ConstDeclList ::= (ConstDeclList) CONST Type ConstDecl ConstDeclMore SEMI;
+
+ConstDecl ::= (ConstDecl) IDENT ASSIGN Constant;
+
+ConstDeclMore ::=   (ConstDeclMore_comma) COMMA ConstDecl ConstDeclMore
+                    |
+                    (ConstDeclMore_e)
+                    ;
+
+Constant ::=    (Constant_n) NUMBER
+                |
+                (Constant_c) CHARACTER
+                |
+                (Constant_b) BOOL
+                ;
+
+VarDeclList ::= (VarDeclList) Type VarDecl VarDeclMore SEMI;
+
+VarDecl ::=     (VarDecl_var) IDENT
+                |
+                (VarDecl_array) IDENT LSQUARE RSQUARE
+                ;
+
+VarDeclMore ::=     (VarDeclMore_comma) COMMA VarDecl VarDeclMore
+                    |
+                    (VarDeclMore_e)
+                    ;
+
+EnumDeclList ::= (EnumDeclList) ENUM EnumDeclName LBRACE EnumDecl EnumDeclMore RBRACE;
+
+EnumDeclName ::= (EnumDeclName) IDENT;
+
+EnumDecl ::=    (EnumDecl_ident) IDENT
+                |
+                (EnumDecl_assign) IDENT ASSIGN NUMBER
+                ;
+
+EnumDeclMore ::=    (EnumDeclMore_comma) COMMA EnumDecl  EnumDeclMore
+                    |
+                    (EnumDeclMore_e)
+                    ;
+
+Type ::= (Type) IDENT;
+
+MethodDeclList ::=  (MethodDeclList_var) MethodDeclList MethodDecl
+                    |
+                    (MethodDeclList_e)
+                    ;
+
+MethodDecl ::= (MethodDecl) MethodRetAndName LPAREN FormParList RPAREN VarDeclListEnum LBRACE StatementList RBRACE;
+
+MethodRetAndName ::=    (MethodRetAndName_type) Type IDENT
+                        |
+                        (MethodRetAndName_void) VOID IDENT
+                        ;
+
+FormParList ::=     (FormParList_var) FormPar FormParMore
+                    |
+                    (FormParList_e)
+                    ;
+
+FormParMore ::=     (FormPar_comma) COMMA FormPar FormParMore
+                    |
+                    (FormParMore_e)
+                    ;
+FormPar ::=     (FormPar_var) Type IDENT
+                |
+                (FormPar_array) Type IDENT LSQUARE RSQUARE
+                ;
+
+VarDeclListEnum ::=     (VarDeclListEnum_enum) VarDeclListEnum VarDeclList
+                        |
+                        (VarDeclListEnum_e)
+                        ;
+
+StatementList ::=   (StatementList_state) StatementList Statement
+                    |
+                    (StatementList_e)
+                    ;
+
+Statement ::=   (Statement_ds) DesignatorStatement SEMI
+                |
+                (Statement_if) IF LPAREN Condition RPAREN Statement ElseStatement
+                |
+                (Statement_break) BREAK SEMI
+                |
+                (Statement_continue) CONTINUE SEMI
+                |
+                (Statement_return1) RETURN SEMI
+                |
+                (Statement_return2) RETURN Expr SEMI
+                |
+                (Statement_read) READ LPAREN Designator RPAREN  SEMI
+                |
+                (Statement_print1) PRINT LPAREN Expr RPAREN SEMI
+                |
+                (Statement_print2) PRINT LPAREN Expr COMMA NUMBER RPAREN SEMI
+                |
+                (Statement_switch) SWITCH LPAREN Expr RPAREN LBRACE CaseList RBRACE
+                |
+                (Statement_for) FOR LPAREN DesignatorStatement SEMI Condition SEMI DesignatorStatement RPAREN Statement
+                |
+                (Statement_sl) LBRACE StatementList RBRACE
+                ;
+
+ElseStatement ::=   (ElseStatement_yes) ELSE Statement
+                    |
+                    (ElseStatement_e)
+                    ;
+
+Condition ::= (Condition) CondTermList;
+
+CondTermList ::=    (CondTermList_term) CondTerm
+                    |
+                    (CondTermList_list) CondTermList OR CondTerm
+                    ;
+
+CondTerm ::= (CondTerm) CondFactList;
+
+CondFactList ::=    (CondFactList_fact) CondFact
+                    |
+                    (CondFactList_list) CondFactList AND CondFact
+                    ;
+
+CondFact ::=    (CondFact_expr) ExprBase
+                |
+                (CondFact_r_expr) ExprBase Relop ExprBase
+                ;
+
+CaseList ::=    (CaseList_list) CaseDecl CaseList
+                |
+                (CaseList_e)
+                ;
+
+CaseDecl ::= (CaseDecl) CASE NUMBER COLON CaseStatementList;
+
+CaseStatementList ::=   (CaseStatementList_list) CaseStatement CaseStatementList
+                    |
+                    (CaseStatement_e)
+                    ;
+
+CaseStatement ::= (CaseStatement) Statement;
+
+DesignatorStatement ::=     (DesignatorStatement_assign) Designator Assignop Expr
+                            |
+                            (DesignatorStatement_method) Designator LPAREN ActParList RPAREN
+                            |
+                            (DesignatorStatement_inc) Designator INC
+                            |
+                            (DesignatorStatement_dec) Designator DEC
+                            |
+                            (DesignatorStatement_e)
+                            ;
+
+ActParList ::=  (ActParList_var) ActPar ActParMore
+                |
+                (ActParList_e)
+                ;
+
+ActParMore ::=  (ActParMore_comma) COMMA ActPar ActParMore
+                |
+                (ActParMore_e)
+                ;
+
+ActPar ::= (ActPar) Expr;
+
+
+Expr ::=        (Expr_add) ExprBase
+                |
+                (Expr_cond) Condition QUESTION Expr COLON Expr
+                ;
+
+ExprBase ::= (ExprBase) AddopTermList;
+
+AddopTermList ::=   (AddopTermList_term) Term
+                    |
+                    (AddopTermList_add) AddopTermList Addop Term
+                    ;
+
+Term ::= (Term) MulopFactorList;
+
+MulopFactorList ::=     (MulopFactorList_factor) Factor
+                        |
+                        (MulopFactorList_mul) MulopFactorList Mulop Factor
+                        ;
+
+Factor ::= (Factor) Unary FactorSub;
+
+Unary ::=   (Unary_m) MINUS
+            |
+            (Unary_e)
+            ;
+
+FactorSub ::=   (FactorSub_var) Designator
+                |
+                (FactorSub_method) Designator LPAREN ActParList RPAREN
+                |
+                (FactorSub_n) NUMBER
+                |
+                (FactorSub_c) CHARACTER
+                |
+                (FactorSub_b) BOOL
+                |
+                (FactorSub_type) NEW Type
+                |
+                (FactorSub_array) NEW Type LSQUARE Expr RSQUARE
+                |
+                (FactorSub_expr) LPAREN Expr RPAREN
+                ;
+
+Designator ::= (Designator) IDENT DesignatorDeclList;
+
+DesignatorDeclList ::=  (DesignatorDeclList_list) DesignatorDecl DesignatorDeclList
+                        |
+                        (DesignatorDeclList_e)
+                        ;
+
+DesignatorDecl ::=      (DesignatorDecl_i) DOT IDENT
+                        |
+                        (DesignatorDecl_l) DOT LENGTH
+                        |
+                        (DesignatorDecl_expr) LSQUARE Expr RSQUARE
+                        ;
+
+Assignop ::= (Assignop) ASSIGN;
+
+Relop ::=   (Relop_eq) EQUAL
+            |
+            (Relop_ne) NOTEQUAL
+            |
+            (Relop_gt) GREATER
+            |
+            (Relop_ge) GREATEREQUAL
+            |
+            (Relop_lt) LESS
+            |
+            (Relop_le) LESSEQUAL
+            ;
+
+Addop ::=   (Addop_plus) PLUS
+            |
+            (Addop_minus) MINUS
+            ;
+
+Mulop ::=   (Mulop_mul) MUL
+            |
+            (Mulop_div) DIV
+            |
+            (Mulop_rem) REM
+            ;
